@@ -1,0 +1,25 @@
+{
+  "name": "devpilot-ai-workspace",
+  "version": "1.0.0",
+  "description": "DevPilot AI - An AI-powered software engineering workspace",
+  "scripts": {
+    "install-backend": "cd backend && npm install",
+    "install-frontend": "cd frontend && npm install",
+    "install-all": "npm run install-backend && npm run install-frontend",
+    "dev-backend": "cd backend && npm run dev",
+    "dev-frontend": "cd frontend && npm run dev",
+    "build-backend": "cd backend && npm run build",
+    "build-frontend": "cd frontend && npm run build",
+    "build-all": "npm run build-backend && npm run build-frontend"
+  },
+  "keywords": [
+    "ai",
+    "workspace",
+    "developer",
+    "code-review",
+    "bug-fixer",
+    "readme"
+  ],
+  "author": "DevPilot Team",
+  "license": "MIT"
+}
