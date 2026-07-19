@@ -30,7 +30,18 @@ export const Login: React.FC<LoginProps> = ({ setPage, loginUser, showToast }) =
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
+      let data: any = {};
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        if (text.includes('<!DOCTYPE html>') || text.startsWith('<') || text.includes('An error occurred')) {
+          throw new Error('Could not connect to the backend server. Make sure your backend server is running on port 5000 (locally) or check your vercel.json Render backend URL (production).');
+        }
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
       }

@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://https://devpilot-backend-xzqe.onrender.com/api/:path*"
+      "destination": "https://devpilot-backend-xzqe.onrender.com/api/:path*"
     }
   ]
 }
