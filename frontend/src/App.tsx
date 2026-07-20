@@ -38,6 +38,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('devpilot_gemini_api_key') || '');
   const [showKey, setShowKey] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState(localStorage.getItem('devpilot_google_client_id') || '15074263932-vmj6fmdv3lg3tncj6keq2lhtni7sojqt.apps.googleusercontent.com');
 
   // Global Toast Notifications
   const [toast, setToast] = useState<Toast | null>(null);
@@ -140,10 +141,16 @@ function App() {
     e.preventDefault();
     if (apiKeyInput.trim()) {
       localStorage.setItem('devpilot_gemini_api_key', apiKeyInput.trim());
-      showToast('API key updated successfully!', 'success');
     } else {
       localStorage.removeItem('devpilot_gemini_api_key');
-      showToast('API key cleared, falling back to mock engine.', 'info');
+    }
+
+    if (googleClientId.trim()) {
+      localStorage.setItem('devpilot_google_client_id', googleClientId.trim());
+      showToast('Configurations updated successfully!', 'success');
+    } else {
+      localStorage.removeItem('devpilot_google_client_id');
+      showToast('Configurations updated, Google Client ID cleared.', 'info');
     }
     setShowSettings(false);
   };
@@ -208,11 +215,23 @@ function App() {
                   </button>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Google Client ID</label>
+                <input 
+                  type="text"
+                  placeholder="xxxxxx-xxxxxx.apps.googleusercontent.com"
+                  value={googleClientId}
+                  onChange={(e) => setGoogleClientId(e.target.value)}
+                  className="w-full px-4 py-3 bg-neutral-darkBg border border-neutral-border rounded-xl font-mono text-xs text-white focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
               <button 
                 type="submit"
                 className="w-full py-3 bg-brand-primary text-neutral-darkBg font-bold text-xs rounded-xl shadow neon-shadow flex items-center justify-center gap-1.5"
               >
-                <Save className="w-4 h-4" /> Save API Config
+                <Save className="w-4 h-4" /> Save Configs
               </button>
             </form>
           </div>
@@ -227,8 +246,8 @@ function App() {
         {currentPage === 'privacy' && <Privacy />}
         {currentPage === 'terms' && <Terms />}
         
-        {currentPage === 'login' && <Login setPage={handleSetPage} loginUser={loginUser} showToast={showToast} />}
-        {currentPage === 'register' && <Register setPage={handleSetPage} loginUser={loginUser} showToast={showToast} />}
+        {currentPage === 'login' && <Login setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
+        {currentPage === 'register' && <Register setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
         
         {currentPage === 'dashboard' && <Dashboard token={token} setPage={handleSetPage} showToast={showToast} />}
         {currentPage === 'projects' && <Projects token={token} setPage={handleSetPage} showToast={showToast} />}

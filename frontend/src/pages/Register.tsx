@@ -4,10 +4,11 @@ import { Terminal, ShieldAlert, UserPlus, Sparkles } from 'lucide-react';
 interface RegisterProps {
   setPage: (page: string) => void;
   loginUser: (token: string, user: any) => void;
-  showToast: (msg: string, type: 'success' | 'error') => void;
+  showToast: (msg: string, type: 'success' | 'error' | 'info') => void;
+  googleClientId: string;
 }
 
-export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToast }) => {
+export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToast, googleClientId }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,10 +62,10 @@ export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToas
     }
   };
 
-  const handleGoogleRegister = async () => {
+  const runSimulatedGoogleRegister = async () => {
     setLoading(true);
     try {
-      showToast('Connecting with Google...', 'success');
+      showToast('Connecting with Google (Simulated)...', 'info');
       await new Promise(r => setTimeout(r, 1200));
 
       const mockGoogleProfile = {
@@ -79,7 +80,15 @@ export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToas
         body: JSON.stringify(mockGoogleProfile)
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
+      let data: any = {};
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
       if (!response.ok) throw new Error(data.error);
 
       loginUser(data.token, data.user);
@@ -88,6 +97,58 @@ export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToas
       showToast(err.message || 'Google Auth failed', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    if (!googleClientId) {
+      runSimulatedGoogleRegister();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: 'email profile openid',
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            setLoading(false);
+            showToast(tokenResponse.error_description || 'Google registration cancelled', 'error');
+            return;
+          }
+          try {
+            showToast('Verifying Google credentials...', 'success');
+            const response = await fetch('/api/auth/google', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: tokenResponse.access_token })
+            });
+
+            const contentType = response.headers.get('content-type');
+            let data: any = {};
+            if (contentType && contentType.includes('application/json')) {
+              data = await response.json();
+            } else {
+              const text = await response.text();
+              throw new Error(text || `Server returned HTTP ${response.status}`);
+            }
+
+            if (!response.ok) throw new Error(data.error || 'Google validation failed');
+
+            loginUser(data.token, data.user);
+            showToast('Google registration successful!', 'success');
+          } catch (err: any) {
+            showToast(err.message || 'Google validation failed', 'error');
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
+      client.requestAccessToken();
+    } catch (err: any) {
+      setLoading(false);
+      showToast('Google Client failed to initialize. Check Client ID settings.', 'error');
     }
   };
 
@@ -173,7 +234,7 @@ export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToas
               onClick={handleGoogleRegister}
               className="w-full py-3 bg-neutral-cardBg text-white rounded-xl border border-neutral-border flex items-center justify-center gap-2 hover:bg-neutral-border/30 transition-all text-sm font-semibold"
             >
-              <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-4.5 h-4.5 mr-1" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
                 <g transform="matrix(1, 0, 0, 1, 0, 0)">
                   <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.57h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.4C21.68,11.75 21.56,11.4 21.35,11.1z" fill="#4285F4" />
                   <path d="M12,20.7c2.35,0 4.32,-0.78 5.76,-2.1l-3.3,-2.57c-0.92,0.6 -2.1,0.97 -3.3,0.97 -2.54,0 -4.7,-1.72 -5.47,-4.03H2.2v2.66C3.65,18.47 7.55,20.7 12,20.7z" fill="#34A853" />
@@ -181,7 +242,7 @@ export const Register: React.FC<RegisterProps> = ({ setPage, loginUser, showToas
                   <path d="M12,5.13c1.28,0 2.42,0.44 3.33,1.3l2.5,-2.5C16.32,2.58 14.35,1.8 12,1.8 7.55,1.8 3.65,4.03 2.2,6.97L6.53,9.63C7.3,7.32 9.46,5.13 12,5.13z" fill="#EA4335" />
                 </g>
               </svg>
-              Google Register (Simulated)
+              {googleClientId ? 'Google Register' : 'Google Register (Simulated)'}
             </button>
           </div>
         </form>

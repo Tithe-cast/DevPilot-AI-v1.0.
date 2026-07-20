@@ -92,9 +92,26 @@ export const login = (req: Request, res: Response): void => {
   }
 };
 
-export const googleLogin = (req: Request, res: Response): void => {
+export const googleLogin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, name, avatarUrl } = req.body;
+    let { email, name, avatarUrl, token } = req.body;
+
+    if (token) {
+      // Fetch verified user profile directly from Google UserInfo API
+      const googleResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!googleResponse.ok) {
+        res.status(400).json({ error: 'Failed to verify Google access token' });
+        return;
+      }
+
+      const googleUser: any = await googleResponse.json();
+      email = googleUser.email;
+      name = googleUser.name;
+      avatarUrl = googleUser.picture;
+    }
 
     if (!email || !name) {
       res.status(400).json({ error: 'Email and name are required' });
@@ -120,10 +137,10 @@ export const googleLogin = (req: Request, res: Response): void => {
       UserStatisticsDB.findOne(user.id);
     }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const jwtToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
     res.status(200).json({
-      token,
+      token: jwtToken,
       user: {
         id: user.id,
         email: user.email,
