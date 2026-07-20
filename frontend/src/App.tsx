@@ -19,7 +19,7 @@ import { Chat } from './pages/Chat';
 import { History } from './pages/History';
 import { Profile } from './pages/Profile';
 
-import { Key, Eye, EyeOff, Save, X, Terminal, AlertCircle } from 'lucide-react';
+import { Key, Eye, EyeOff, Save, X, Terminal, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface Toast {
   message: string;
@@ -171,7 +171,14 @@ function App() {
         
         {/* Global Toast */}
         {toast && (
-          <div className={`fixed bottom-5 right-5 z-[100] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border text-xs font-semibold animate-bounce ${toast.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-brand-primary/10 border-brand-primary/20 text-brand-primary'}`}>
+          <div className={`fixed bottom-5 right-5 z-[100] px-4 py-3.5 rounded-xl shadow-2xl flex items-center gap-2.5 border text-xs font-semibold animate-bounce ${
+            toast.type === 'success' ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/10' : 
+            toast.type === 'error' ? 'bg-rose-600 text-white border-rose-500 shadow-rose-500/10' : 
+            'bg-brand-primary text-neutral-darkBg border-brand-primary shadow-brand-primary/10'
+          }`}>
+            {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
+            {toast.type === 'error' && <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+            {toast.type === 'info' && <Terminal className="w-4 h-4 flex-shrink-0" />}
             <span>{toast.message}</span>
           </div>
         )}
