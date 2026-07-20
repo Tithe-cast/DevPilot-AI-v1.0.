@@ -1,4 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+
+const DB_FILE = path.join(__dirname, '..', '..', 'data', 'db.json');
 
 // Interface declarations
 export interface User {
@@ -223,55 +227,187 @@ export const ReadmeDocumentModel = mongoose.models.ReadmeDocument || mongoose.mo
 export const RecommendationModel = mongoose.models.Recommendation || mongoose.model('Recommendation', RecommendationSchema);
 export const UserStatisticsModel = mongoose.models.UserStatistics || mongoose.model('UserStatistics', UserStatisticsSchema);
 
-// CRUD helper wrappers
-function createCRUDWrapper<T extends { id: string }, K>(Model: mongoose.Model<any>) {
+// Connection Status Flag
+let isMongoConnected = false;
+export const setMongoConnected = (connected: boolean) => {
+  isMongoConnected = connected;
+};
+
+// Ensure backend data directory exists
+if (!fs.existsSync(path.dirname(DB_FILE))) {
+  fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+}
+if (!fs.existsSync(DB_FILE)) {
+  fs.writeFileSync(DB_FILE, JSON.stringify({
+    users: [],
+    projects: [],
+    aiChats: [],
+    codeReviews: [],
+    bugReports: [],
+    readmeDocuments: [],
+    recommendations: [],
+    userStatistics: []
+  }, null, 2));
+}
+
+// Low-level JSON Helpers
+function readJSON(): any {
+  try {
+    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+  } catch (err) {
+    return {};
+  }
+}
+
+function writeJSON(data: any) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('Failed to write local database file:', err);
+  }
+}
+
+// Local file-based CRUD engines
+function localCRUD(collectionKey: string) {
   return {
-    async find(filter?: Partial<T>): Promise<T[]> {
-      return Model.find(filter || {}).lean() as unknown as Promise<T[]>;
+    async find(filter?: any): Promise<any[]> {
+      const data = readJSON();
+      const list = data[collectionKey] || [];
+      if (!filter) return list;
+      return list.filter((item: any) => {
+        for (const key in filter) {
+          if (item[key] !== filter[key]) return false;
+        }
+        return true;
+      });
     },
 
-    async findOne(filter: Partial<T>): Promise<T | undefined> {
-      const doc = await Model.findOne(filter).lean();
-      return (doc || undefined) as unknown as Promise<T | undefined>;
+    async findOne(filter: any): Promise<any> {
+      const list = await this.find(filter);
+      return list[0];
     },
 
-    async create(item: Omit<T, 'id' | 'createdAt'>): Promise<T> {
-      const newItem = new Model({
+    async create(item: any): Promise<any> {
+      const data = readJSON();
+      if (!data[collectionKey]) data[collectionKey] = [];
+      const newItem = {
         ...item,
         id: Math.random().toString(36).substring(2, 9),
         createdAt: new Date().toISOString()
-      });
-      await newItem.save();
-      return newItem.toObject() as unknown as Promise<T>;
+      };
+      data[collectionKey].push(newItem);
+      writeJSON(data);
+      return newItem;
     },
 
-    async update(id: string, updates: Partial<Omit<T, 'id' | 'createdAt'>>): Promise<T | undefined> {
-      const doc = await Model.findOneAndUpdate({ id }, updates, { new: true }).lean();
-      return (doc || undefined) as unknown as Promise<T | undefined>;
+    async update(id: string, updates: any): Promise<any> {
+      const data = readJSON();
+      const list = data[collectionKey] || [];
+      const index = list.findIndex((item: any) => item.id === id);
+      if (index === -1) return undefined;
+      list[index] = { ...list[index], ...updates };
+      writeJSON(data);
+      return list[index];
     },
 
     async delete(id: string): Promise<boolean> {
-      const res = await Model.deleteOne({ id });
-      return (res.deletedCount || 0) > 0;
+      const data = readJSON();
+      const list = data[collectionKey] || [];
+      const index = list.findIndex((item: any) => item.id === id);
+      if (index === -1) return false;
+      list.splice(index, 1);
+      writeJSON(data);
+      return true;
+    }
+  };
+}
+
+// Hybrid CRUD helper wrappers
+function createCRUDWrapper<T extends { id: string }, K>(Model: mongoose.Model<any>, collectionKey: string) {
+  const local = localCRUD(collectionKey);
+  return {
+    async find(filter?: Partial<T>): Promise<T[]> {
+      if (isMongoConnected) {
+        try {
+          return await Model.find(filter || {}).lean() as unknown as T[];
+        } catch (err) {
+          console.warn('MongoDB query failed, falling back to local database.', err);
+        }
+      }
+      return local.find(filter) as unknown as Promise<T[]>;
+    },
+
+    async findOne(filter: Partial<T>): Promise<T | undefined> {
+      if (isMongoConnected) {
+        try {
+          const doc = await Model.findOne(filter).lean();
+          return (doc || undefined) as unknown as T;
+        } catch (err) {
+          console.warn('MongoDB query failed, falling back to local database.', err);
+        }
+      }
+      return local.findOne(filter) as unknown as Promise<T | undefined>;
+    },
+
+    async create(item: Omit<T, 'id' | 'createdAt'>): Promise<T> {
+      if (isMongoConnected) {
+        try {
+          const newItem = new Model({
+            ...item,
+            id: Math.random().toString(36).substring(2, 9),
+            createdAt: new Date().toISOString()
+          });
+          await newItem.save();
+          return newItem.toObject() as unknown as T;
+        } catch (err) {
+          console.warn('MongoDB write failed, falling back to local database.', err);
+        }
+      }
+      return local.create(item) as unknown as Promise<T>;
+    },
+
+    async update(id: string, updates: Partial<Omit<T, 'id' | 'createdAt'>>): Promise<T | undefined> {
+      if (isMongoConnected) {
+        try {
+          const doc = await Model.findOneAndUpdate({ id }, updates, { new: true }).lean();
+          return (doc || undefined) as unknown as T;
+        } catch (err) {
+          console.warn('MongoDB update failed, falling back to local database.', err);
+        }
+      }
+      return local.update(id, updates) as unknown as Promise<T | undefined>;
+    },
+
+    async delete(id: string): Promise<boolean> {
+      if (isMongoConnected) {
+        try {
+          const res = await Model.deleteOne({ id });
+          return (res.deletedCount || 0) > 0;
+        } catch (err) {
+          console.warn('MongoDB delete failed, falling back to local database.', err);
+        }
+      }
+      return local.delete(id);
     }
   };
 }
 
 // Expose collections CRUD
-export const UsersDB = createCRUDWrapper<User, any>(UserModel);
-export const ProjectsDB = createCRUDWrapper<Project, any>(ProjectModel);
-export const AIChatsDB = createCRUDWrapper<AIChat, any>(AIChatModel);
-export const CodeReviewsDB = createCRUDWrapper<CodeReview, any>(CodeReviewModel);
-export const BugReportsDB = createCRUDWrapper<BugReport, any>(BugReportModel);
-export const ReadmeDocumentsDB = createCRUDWrapper<ReadmeDocument, any>(ReadmeDocumentModel);
-export const RecommendationsDB = createCRUDWrapper<Recommendation, any>(RecommendationModel);
+export const UsersDB = createCRUDWrapper<User, any>(UserModel, 'users');
+export const ProjectsDB = createCRUDWrapper<Project, any>(ProjectModel, 'projects');
+export const AIChatsDB = createCRUDWrapper<AIChat, any>(AIChatModel, 'aiChats');
+export const CodeReviewsDB = createCRUDWrapper<CodeReview, any>(CodeReviewModel, 'codeReviews');
+export const BugReportsDB = createCRUDWrapper<BugReport, any>(BugReportModel, 'bugReports');
+export const ReadmeDocumentsDB = createCRUDWrapper<ReadmeDocument, any>(ReadmeDocumentModel, 'readmeDocuments');
+export const RecommendationsDB = createCRUDWrapper<Recommendation, any>(RecommendationModel, 'recommendations');
 
-// Specialized stats DB helper
-export const UserStatisticsDB = {
+// Specialized stats local database helper
+const localStats = {
   async findOne(userId: string): Promise<UserStatistics> {
-    let stats = await UserStatisticsModel.findOne({ userId }).lean();
+    const local = localCRUD('userStatistics');
+    let stats = await local.findOne({ userId });
     if (!stats) {
-      const newStats = new UserStatisticsModel({
+      stats = await local.create({
         userId,
         totalProjects: 0,
         aiRequests: 0,
@@ -287,27 +423,98 @@ export const UserStatisticsDB = {
           { week: 'Sun', requests: 0 }
         ]
       });
-      await newStats.save();
-      stats = newStats.toObject();
     }
-    return stats as unknown as UserStatistics;
+    return stats;
+  },
+
+  async update(userId: string, updates: any): Promise<UserStatistics> {
+    const data = readJSON();
+    const list = data.userStatistics || [];
+    const index = list.findIndex((item: any) => item.userId === userId);
+    if (index === -1) {
+      const newStats = {
+        userId,
+        totalProjects: 0,
+        aiRequests: 0,
+        generatedDocs: 0,
+        savedConversations: 0,
+        weeklyActivity: [
+          { week: 'Mon', requests: 0 },
+          { week: 'Tue', requests: 0 },
+          { week: 'Wed', requests: 0 },
+          { week: 'Thu', requests: 0 },
+          { week: 'Fri', requests: 0 },
+          { week: 'Sat', requests: 0 },
+          { week: 'Sun', requests: 0 }
+        ],
+        ...updates
+      };
+      list.push(newStats);
+      data.userStatistics = list;
+      writeJSON(data);
+      return newStats as UserStatistics;
+    }
+    list[index] = { ...list[index], ...updates };
+    writeJSON(data);
+    return list[index] as UserStatistics;
+  }
+};
+
+// Expose specialized stats DB helper
+export const UserStatisticsDB = {
+  async findOne(userId: string): Promise<UserStatistics> {
+    if (isMongoConnected) {
+      try {
+        let stats = await UserStatisticsModel.findOne({ userId }).lean();
+        if (!stats) {
+          const newStats = new UserStatisticsModel({
+            userId,
+            totalProjects: 0,
+            aiRequests: 0,
+            generatedDocs: 0,
+            savedConversations: 0,
+            weeklyActivity: [
+              { week: 'Mon', requests: 0 },
+              { week: 'Tue', requests: 0 },
+              { week: 'Wed', requests: 0 },
+              { week: 'Thu', requests: 0 },
+              { week: 'Fri', requests: 0 },
+              { week: 'Sat', requests: 0 },
+              { week: 'Sun', requests: 0 }
+            ]
+          });
+          await newStats.save();
+          stats = newStats.toObject();
+        }
+        return stats as unknown as UserStatistics;
+      } catch (err) {
+        console.warn('MongoDB stats query failed, falling back to local database.', err);
+      }
+    }
+    return localStats.findOne(userId);
   },
 
   async update(userId: string, updates: Partial<Omit<UserStatistics, 'userId'>>): Promise<UserStatistics> {
-    // ensure initialization
-    await UserStatisticsDB.findOne(userId);
-    const updated = await UserStatisticsModel.findOneAndUpdate({ userId }, updates, { new: true }).lean();
-    return updated as unknown as UserStatistics;
+    if (isMongoConnected) {
+      try {
+        await this.findOne(userId);
+        const updated = await UserStatisticsModel.findOneAndUpdate({ userId }, updates, { new: true }).lean();
+        return updated as unknown as UserStatistics;
+      } catch (err) {
+        console.warn('MongoDB stats update failed, falling back to local database.', err);
+      }
+    }
+    return localStats.update(userId, updates);
   },
 
   async increment(userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): Promise<UserStatistics> {
-    const current = await UserStatisticsDB.findOne(userId);
+    const current = await this.findOne(userId);
     const updates: any = { [field]: current[field] + 1 };
     
     if (field === 'aiRequests') {
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const currentDay = days[new Date().getDay()];
-      updates.weeklyActivity = current.weeklyActivity.map(act => {
+      updates.weeklyActivity = current.weeklyActivity.map((act: any) => {
         if (act.week === currentDay) {
           return { ...act, requests: act.requests + 1 };
         }
@@ -315,12 +522,12 @@ export const UserStatisticsDB = {
       });
     }
 
-    return UserStatisticsDB.update(userId, updates);
+    return this.update(userId, updates);
   },
 
   async decrement(userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): Promise<UserStatistics> {
-    const current = await UserStatisticsDB.findOne(userId);
+    const current = await this.findOne(userId);
     const updates = { [field]: Math.max(0, current[field] - 1) };
-    return UserStatisticsDB.update(userId, updates);
+    return this.update(userId, updates);
   }
 };

@@ -32,7 +32,7 @@ import {
   deleteHistoryItem 
 } from './controllers/ai.controller';
 import { authenticateToken } from './middleware/auth.middleware';
-import { UsersDB, ProjectsDB, UserStatisticsDB } from './db/db';
+import { UsersDB, ProjectsDB, UserStatisticsDB, setMongoConnected } from './db/db';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -119,15 +119,22 @@ const seedDatabase = async () => {
   }
 };
 
-// Establish MongoDB Connection
+// Establish MongoDB Connection (fail fast to fallback if MongoDB is not running locally)
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/devpilot';
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000, // wait 5 seconds before failing
+  bufferCommands: false // disable command buffering so queries fail immediately rather than hanging
+})
   .then(() => {
     console.log('🍃 Connected to MongoDB successfully');
+    setMongoConnected(true);
     seedDatabase();
   })
   .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err);
+    console.error('❌ MongoDB Connection Error:', err.message || err);
+    console.log('⚠️ Running backend on local fallback file database (db.json)');
+    setMongoConnected(false);
+    seedDatabase();
   });
 
 // ---------------- API Routes ----------------
