@@ -35,15 +35,6 @@ DevPilot AI is a professional, AI-powered software engineering workspace designe
 
 ---
 
-## 🍃 Hybrid Database Architecture
-
-DevPilot AI is built to be zero-config in local development while fully capable of production-grade MongoDB persistence:
-1. **MongoDB Connection**: On startup, the backend attempts to connect to `process.env.MONGODB_URI`.
-2. **Fail-Fast Fallback**: If connection to MongoDB is refused or times out (after 5 seconds), the backend automatically switches to using the local file database (`backend/data/db.json`).
-3. **Seamless Failover**: All database wrappers adapt asynchronously, guaranteeing identical CRUD behaviors across both MongoDB and local JSON fallback engines.
-
----
-
 ## 📁 Repository Structure
 
 ```
@@ -59,51 +50,9 @@ DevPilot AI v1.0/
 └── package.json              # Root npm scripts for concurrent development & builds
 ```
 
----
-
-## 💻 Local Setup & Execution
-
-### 1. Install Dependencies
-Run the install command from the root workspace directory to set up both projects:
-```bash
-npm run install-all
-```
-
-### 2. Run the Development Servers
-Start both the backend API and frontend development servers concurrently:
-```bash
-# Run both servers
-npm run dev-backend & npm run dev-frontend
-```
-- **Backend API**: Running at [http://localhost:5000](http://localhost:5000)
-- **Frontend Client**: Running at [http://localhost:3000](http://localhost:3000)
-
 ### 3. Demo Credentials
 Log in with the preloaded developer seed account:
 - **Email**: `demo@devpilot.ai`
 - **Password**: `password123`
 
 ---
-
-## 📦 Building for Production
-
-Compile both backend and frontend applications to their respective production builds:
-```bash
-npm run build-all
-```
-
----
-
-## 🌐 Deployment
-
-### Backend (Render / Heroku)
-1. Set up a **Web Service** on Render.
-2. Build command: `cd backend && npm install && npm run build`
-3. Start command: `cd backend && npm run start`
-4. Add environment variables: `JWT_SECRET`, `GEMINI_API_KEY` (optional), and `MONGODB_URI` (to hook up a production MongoDB database).
-5. Attach a **Persistent Disk** mounted at `/backend/data` (Size: `1 GB`) to persist the JSON database file (`db.json`) if MongoDB is not used.
-
-### Frontend (Vercel)
-1. Link your repository to a new project in Vercel.
-2. Set the root directory to `frontend`.
-3. Vercel will auto-detect Vite. The pre-packaged `vercel.json` will automatically rewrite `/api/*` requests to your live Render backend URL.
