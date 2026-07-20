@@ -15,6 +15,7 @@ export const EditProject: React.FC<EditProjectProps> = ({ token, projectId, setP
   const [framework, setFramework] = useState('React.js');
   const [language, setLanguage] = useState('TypeScript');
   const [repoUrl, setRepoUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [status, setStatus] = useState<'Active' | 'Planning' | 'Archived'>('Active');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,6 +35,7 @@ export const EditProject: React.FC<EditProjectProps> = ({ token, projectId, setP
       setFramework(data.framework);
       setLanguage(data.language);
       setRepoUrl(data.repoUrl || '');
+      setImageUrl(data.imageUrl || '');
       setStatus(data.status);
     } catch (err: any) {
       showToast(err.message || 'Failed to retrieve project info', 'error');
@@ -65,7 +67,7 @@ export const EditProject: React.FC<EditProjectProps> = ({ token, projectId, setP
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          name, description, category, framework, language, repoUrl, status
+          name, description, category, framework, language, repoUrl, imageUrl, status
         })
       });
 
@@ -189,6 +191,15 @@ export const EditProject: React.FC<EditProjectProps> = ({ token, projectId, setP
             <input 
               type="url" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/sarahdev/billing-gateway"
+              className="w-full px-4 py-3 bg-neutral-darkBg border border-neutral-border rounded-xl text-white focus:outline-none focus:border-brand-primary"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Project Image URL (Optional)</label>
+            <input 
+              type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=600"
               className="w-full px-4 py-3 bg-neutral-darkBg border border-neutral-border rounded-xl text-white focus:outline-none focus:border-brand-primary"
             />
           </div>

@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 
 // Load environment variables
 dotenv.config();
@@ -47,8 +48,8 @@ app.use((req, res, next) => {
 });
 
 // Seed Demo User and Projects if database is empty
-const seedDatabase = () => {
-  const users = UsersDB.find();
+const seedDatabase = async () => {
+  const users = await UsersDB.find();
   if (users.length === 0) {
     console.log('Seeding initial developer demo database...');
     
@@ -56,7 +57,7 @@ const seedDatabase = () => {
     const SALT = 'devpilot_secure_salt_string';
     const passwordHash = crypto.pbkdf2Sync('password123', SALT, 1000, 64, 'sha512').toString('hex');
     
-    const demoUser = UsersDB.create({
+    const demoUser = await UsersDB.create({
       email: 'demo@devpilot.ai',
       passwordHash,
       name: 'Sarah Dev',
@@ -64,7 +65,7 @@ const seedDatabase = () => {
     });
 
     // Create 3 demo projects
-    ProjectsDB.create({
+    await ProjectsDB.create({
       userId: demoUser.id,
       name: 'SaaS Billing Gateway',
       description: 'A microservice for managing Stripe billing webhooks, subscription cycles, and invoices.',
@@ -75,7 +76,7 @@ const seedDatabase = () => {
       status: 'Active'
     });
 
-    ProjectsDB.create({
+    await ProjectsDB.create({
       userId: demoUser.id,
       name: 'Developer Portfolio UI',
       description: 'Stunning glassmorphic developer portfolio showcasing open source achievements and blogs.',
@@ -86,7 +87,7 @@ const seedDatabase = () => {
       status: 'Active'
     });
 
-    ProjectsDB.create({
+    await ProjectsDB.create({
       userId: demoUser.id,
       name: 'Eco-Tracker Mobile Client',
       description: 'Cross-platform mobile application helping individuals calculate daily carbon footprints.',
@@ -98,7 +99,7 @@ const seedDatabase = () => {
     });
 
     // Set statistics
-    UserStatisticsDB.update(demoUser.id, {
+    await UserStatisticsDB.update(demoUser.id, {
       totalProjects: 3,
       aiRequests: 18,
       generatedDocs: 2,
@@ -118,7 +119,16 @@ const seedDatabase = () => {
   }
 };
 
-seedDatabase();
+// Establish MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/devpilot';
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('🍃 Connected to MongoDB successfully');
+    seedDatabase();
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB Connection Error:', err);
+  });
 
 // ---------------- API Routes ----------------
 
@@ -132,7 +142,7 @@ app.put('/api/auth/profile', authenticateToken, updateProfile);
 // Project endpoints
 app.post('/api/projects', authenticateToken, createProject);
 app.get('/api/projects', authenticateToken, getProjects);
-app.get('/api/projects/:id', authenticateToken, getProjectDetails);
+app.get('/api/projects/:id', getProjectDetails);
 app.put('/api/projects/:id', authenticateToken, updateProject);
 app.delete('/api/projects/:id', authenticateToken, deleteProject);
 

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { ProjectsDB, UserStatisticsDB } from '../db/db';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
-export const createProject = (req: AuthenticatedRequest, res: Response): void => {
+export const createProject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -10,14 +10,14 @@ export const createProject = (req: AuthenticatedRequest, res: Response): void =>
       return;
     }
 
-    const { name, description, category, framework, language, repoUrl, status } = req.body;
+    const { name, description, category, framework, language, repoUrl, imageUrl, status } = req.body;
 
     if (!name || !description || !category || !framework || !language) {
       res.status(400).json({ error: 'Name, description, category, framework, and language are required' });
       return;
     }
 
-    const newProject = ProjectsDB.create({
+    const newProject = await ProjectsDB.create({
       userId,
       name,
       description,
@@ -25,11 +25,12 @@ export const createProject = (req: AuthenticatedRequest, res: Response): void =>
       framework,
       language,
       repoUrl: repoUrl || '',
+      imageUrl: imageUrl || '',
       status: status || 'Planning'
     });
 
     // Update user statistics
-    UserStatisticsDB.increment(userId, 'totalProjects');
+    await UserStatisticsDB.increment(userId, 'totalProjects');
 
     res.status(201).json(newProject);
   } catch (error: any) {
@@ -37,7 +38,7 @@ export const createProject = (req: AuthenticatedRequest, res: Response): void =>
   }
 };
 
-export const getProjects = (req: AuthenticatedRequest, res: Response): void => {
+export const getProjects = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -45,23 +46,17 @@ export const getProjects = (req: AuthenticatedRequest, res: Response): void => {
       return;
     }
 
-    const projects = ProjectsDB.find({ userId });
+    const projects = await ProjectsDB.find({ userId });
     res.status(200).json(projects);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Server error retrieving projects' });
   }
 };
 
-export const getProjectDetails = (req: AuthenticatedRequest, res: Response): void => {
+export const getProjectDetails = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
     const { id } = req.params;
-    const project = ProjectsDB.findOne({ id, userId });
+    const project = await ProjectsDB.findOne({ id });
 
     if (!project) {
       res.status(404).json({ error: 'Project not found' });
@@ -74,7 +69,7 @@ export const getProjectDetails = (req: AuthenticatedRequest, res: Response): voi
   }
 };
 
-export const updateProject = (req: AuthenticatedRequest, res: Response): void => {
+export const updateProject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -83,21 +78,22 @@ export const updateProject = (req: AuthenticatedRequest, res: Response): void =>
     }
 
     const { id } = req.params;
-    const { name, description, category, framework, language, repoUrl, status } = req.body;
+    const { name, description, category, framework, language, repoUrl, imageUrl, status } = req.body;
 
-    const project = ProjectsDB.findOne({ id, userId });
+    const project = await ProjectsDB.findOne({ id, userId });
     if (!project) {
       res.status(404).json({ error: 'Project not found or unauthorized' });
       return;
     }
 
-    const updated = ProjectsDB.update(id, {
+    const updated = await ProjectsDB.update(id, {
       name: name !== undefined ? name : project.name,
       description: description !== undefined ? description : project.description,
       category: category !== undefined ? category : project.category,
       framework: framework !== undefined ? framework : project.framework,
       language: language !== undefined ? language : project.language,
       repoUrl: repoUrl !== undefined ? repoUrl : project.repoUrl,
+      imageUrl: imageUrl !== undefined ? imageUrl : project.imageUrl,
       status: status !== undefined ? status : project.status
     });
 
@@ -107,7 +103,7 @@ export const updateProject = (req: AuthenticatedRequest, res: Response): void =>
   }
 };
 
-export const deleteProject = (req: AuthenticatedRequest, res: Response): void => {
+export const deleteProject = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -116,16 +112,16 @@ export const deleteProject = (req: AuthenticatedRequest, res: Response): void =>
     }
 
     const { id } = req.params;
-    const project = ProjectsDB.findOne({ id, userId });
+    const project = await ProjectsDB.findOne({ id, userId });
     if (!project) {
       res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    ProjectsDB.delete(id);
+    await ProjectsDB.delete(id);
 
     // Update stats
-    UserStatisticsDB.decrement(userId, 'totalProjects');
+    await UserStatisticsDB.decrement(userId, 'totalProjects');
 
     res.status(200).json({ success: true, message: 'Project deleted successfully' });
   } catch (error: any) {

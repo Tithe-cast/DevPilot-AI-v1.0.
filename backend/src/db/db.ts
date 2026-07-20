@@ -1,9 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-// Define DB paths
-const DB_DIR = path.join(__dirname, '../../data');
-const DB_FILE = path.join(DB_DIR, 'db.json');
+import mongoose, { Schema } from 'mongoose';
 
 // Interface declarations
 export interface User {
@@ -24,6 +19,7 @@ export interface Project {
   framework: string;
   language: string;
   repoUrl?: string;
+  imageUrl?: string;
   status: 'Active' | 'Archived' | 'Planning';
   createdAt: string;
 }
@@ -109,191 +105,173 @@ export interface UserStatistics {
   weeklyActivity: { week: string; requests: number }[];
 }
 
-interface DatabaseSchema {
-  users: User[];
-  projects: Project[];
-  aiChats: AIChat[];
-  codeReviews: CodeReview[];
-  bugReports: BugReport[];
-  readmeDocuments: ReadmeDocument[];
-  recommendations: Recommendation[];
-  userStatistics: UserStatistics[];
+// Mongoose Schemas
+const UserSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  passwordHash: { type: String, required: true },
+  name: { type: String, required: true },
+  avatarUrl: { type: String, required: true },
+  createdAt: { type: String, required: true }
+});
+
+const ProjectSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  name: { type: String, required: true },
+  description: { type: String, required: true },
+  category: { type: String, required: true },
+  framework: { type: String, required: true },
+  language: { type: String, required: true },
+  repoUrl: { type: String },
+  imageUrl: { type: String },
+  status: { type: String, required: true, enum: ['Active', 'Archived', 'Planning'] },
+  createdAt: { type: String, required: true }
+});
+
+const ChatMessageSchema = new Schema({
+  sender: { type: String, required: true, enum: ['user', 'ai'] },
+  content: { type: String, required: true },
+  timestamp: { type: String, required: true }
+});
+
+const AIChatSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  projectId: { type: String },
+  title: { type: String, required: true },
+  messages: [ChatMessageSchema],
+  createdAt: { type: String, required: true }
+});
+
+const CodeReviewSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  language: { type: String, required: true },
+  sourceCode: { type: String, required: true },
+  review: {
+    overview: { type: String, required: true },
+    bestPractices: [String],
+    performance: [String],
+    security: [String],
+    refactoredCode: { type: String }
+  },
+  createdAt: { type: String, required: true }
+});
+
+const BugReportSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  errorMessage: { type: String, required: true },
+  stackTrace: { type: String },
+  code: { type: String },
+  analysis: {
+    rootCause: { type: String, required: true },
+    explanation: { type: String, required: true },
+    suggestedSolution: { type: String },
+    preventionTips: [String]
+  },
+  createdAt: { type: String, required: true }
+});
+
+const ReadmeDocumentSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  projectName: { type: String, required: true },
+  description: { type: String, required: true },
+  features: { type: String },
+  installation: { type: String },
+  techStack: { type: String },
+  content: { type: String, required: true },
+  createdAt: { type: String, required: true }
+});
+
+const RecommendationSchema = new Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  projectId: { type: String, required: true },
+  recommendation: {
+    folderStructure: { type: String, required: true },
+    packages: [String],
+    authLibrary: { type: String, required: true },
+    database: { type: String, required: true },
+    deployment: { type: String, required: true },
+    architectureTips: { type: String, required: true }
+  },
+  createdAt: { type: String, required: true }
+});
+
+const UserStatisticsSchema = new Schema({
+  userId: { type: String, required: true, unique: true },
+  totalProjects: { type: Number, required: true, default: 0 },
+  aiRequests: { type: Number, required: true, default: 0 },
+  generatedDocs: { type: Number, required: true, default: 0 },
+  savedConversations: { type: Number, required: true, default: 0 },
+  weeklyActivity: [{
+    week: { type: String, required: true },
+    requests: { type: Number, required: true, default: 0 }
+  }]
+});
+
+// Mongoose Models
+export const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
+export const ProjectModel = mongoose.models.Project || mongoose.model('Project', ProjectSchema);
+export const AIChatModel = mongoose.models.AIChat || mongoose.model('AIChat', AIChatSchema);
+export const CodeReviewModel = mongoose.models.CodeReview || mongoose.model('CodeReview', CodeReviewSchema);
+export const BugReportModel = mongoose.models.BugReport || mongoose.model('BugReport', BugReportSchema);
+export const ReadmeDocumentModel = mongoose.models.ReadmeDocument || mongoose.model('ReadmeDocument', ReadmeDocumentSchema);
+export const RecommendationModel = mongoose.models.Recommendation || mongoose.model('Recommendation', RecommendationSchema);
+export const UserStatisticsModel = mongoose.models.UserStatistics || mongoose.model('UserStatistics', UserStatisticsSchema);
+
+// CRUD helper wrappers
+function createCRUDWrapper<T extends { id: string }, K>(Model: mongoose.Model<any>) {
+  return {
+    async find(filter?: Partial<T>): Promise<T[]> {
+      return Model.find(filter || {}).lean() as unknown as Promise<T[]>;
+    },
+
+    async findOne(filter: Partial<T>): Promise<T | undefined> {
+      const doc = await Model.findOne(filter).lean();
+      return (doc || undefined) as unknown as Promise<T | undefined>;
+    },
+
+    async create(item: Omit<T, 'id' | 'createdAt'>): Promise<T> {
+      const newItem = new Model({
+        ...item,
+        id: Math.random().toString(36).substring(2, 9),
+        createdAt: new Date().toISOString()
+      });
+      await newItem.save();
+      return newItem.toObject() as unknown as Promise<T>;
+    },
+
+    async update(id: string, updates: Partial<Omit<T, 'id' | 'createdAt'>>): Promise<T | undefined> {
+      const doc = await Model.findOneAndUpdate({ id }, updates, { new: true }).lean();
+      return (doc || undefined) as unknown as Promise<T | undefined>;
+    },
+
+    async delete(id: string): Promise<boolean> {
+      const res = await Model.deleteOne({ id });
+      return (res.deletedCount || 0) > 0;
+    }
+  };
 }
-
-const defaultDb: DatabaseSchema = {
-  users: [],
-  projects: [],
-  aiChats: [],
-  codeReviews: [],
-  bugReports: [],
-  readmeDocuments: [],
-  recommendations: [],
-  userStatistics: []
-};
-
-class LocalDatabase {
-  private data: DatabaseSchema = defaultDb;
-
-  constructor() {
-    this.init();
-  }
-
-  private init() {
-    if (!fs.existsSync(DB_DIR)) {
-      fs.mkdirSync(DB_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(DB_FILE)) {
-      this.save();
-    } else {
-      try {
-        const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
-        this.data = JSON.parse(fileContent);
-      } catch (err) {
-        console.error('Error reading database file, resetting to default', err);
-        this.data = defaultDb;
-        this.save();
-      }
-    }
-  }
-
-  private save() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Failed to save to database file', err);
-    }
-  }
-
-  // Generic DB Collection Methods
-  public getCollection<K extends keyof DatabaseSchema>(collectionName: K): DatabaseSchema[K] {
-    return this.data[collectionName];
-  }
-
-  public saveCollection<K extends keyof DatabaseSchema>(collectionName: K, items: DatabaseSchema[K]) {
-    this.data[collectionName] = items;
-    this.save();
-  }
-
-  // Helper CRUD generators
-  public createCRUD<T extends { id: string }, K extends keyof DatabaseSchema>(collectionName: K) {
-    const db = this;
-    return {
-      find(filter?: Partial<T>): T[] {
-        const items = db.getCollection(collectionName) as unknown as T[];
-        if (!filter) return items;
-        return items.filter((item) => {
-          for (const key in filter) {
-            if (item[key] !== filter[key]) return false;
-          }
-          return true;
-        });
-      },
-
-      findOne(filter: Partial<T>): T | undefined {
-        const items = db.getCollection(collectionName) as unknown as T[];
-        return items.find((item) => {
-          for (const key in filter) {
-            if (item[key] !== filter[key]) return false;
-          }
-          return true;
-        });
-      },
-
-      create(item: Omit<T, 'id' | 'createdAt'>): T {
-        const items = db.getCollection(collectionName) as unknown as T[];
-        const newItem = {
-          ...item,
-          id: Math.random().toString(36).substring(2, 9),
-          createdAt: new Date().toISOString()
-        } as unknown as T;
-        items.push(newItem);
-        db.saveCollection(collectionName, items as unknown as DatabaseSchema[K]);
-        return newItem;
-      },
-
-      update(id: string, updates: Partial<Omit<T, 'id' | 'createdAt'>>): T | undefined {
-        const items = db.getCollection(collectionName) as unknown as T[];
-        const index = items.findIndex((item) => item.id === id);
-        if (index === -1) return undefined;
-        items[index] = { ...items[index], ...updates };
-        db.saveCollection(collectionName, items as unknown as DatabaseSchema[K]);
-        return items[index];
-      },
-
-      delete(id: string): boolean {
-        const items = db.getCollection(collectionName) as unknown as T[];
-        const index = items.findIndex((item) => item.id === id);
-        if (index === -1) return false;
-        items.splice(index, 1);
-        db.saveCollection(collectionName, items as unknown as DatabaseSchema[K]);
-        return true;
-      }
-    };
-  }
-}
-
-export const db = new LocalDatabase();
 
 // Expose collections CRUD
-export const UsersDB = {
-  find: (f?: Partial<User>) => db.createCRUD<User, 'users'>('users').find(f),
-  findOne: (f: Partial<User>) => db.createCRUD<User, 'users'>('users').findOne(f),
-  create: (item: Omit<User, 'id' | 'createdAt'>) => db.createCRUD<User, 'users'>('users').create(item),
-  update: (id: string, updates: Partial<Omit<User, 'id' | 'createdAt'>>) => db.createCRUD<User, 'users'>('users').update(id, updates),
-  delete: (id: string) => db.createCRUD<User, 'users'>('users').delete(id)
-};
+export const UsersDB = createCRUDWrapper<User, any>(UserModel);
+export const ProjectsDB = createCRUDWrapper<Project, any>(ProjectModel);
+export const AIChatsDB = createCRUDWrapper<AIChat, any>(AIChatModel);
+export const CodeReviewsDB = createCRUDWrapper<CodeReview, any>(CodeReviewModel);
+export const BugReportsDB = createCRUDWrapper<BugReport, any>(BugReportModel);
+export const ReadmeDocumentsDB = createCRUDWrapper<ReadmeDocument, any>(ReadmeDocumentModel);
+export const RecommendationsDB = createCRUDWrapper<Recommendation, any>(RecommendationModel);
 
-export const ProjectsDB = {
-  find: (f?: Partial<Project>) => db.createCRUD<Project, 'projects'>('projects').find(f),
-  findOne: (f: Partial<Project>) => db.createCRUD<Project, 'projects'>('projects').findOne(f),
-  create: (item: Omit<Project, 'id' | 'createdAt'>) => db.createCRUD<Project, 'projects'>('projects').create(item),
-  update: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => db.createCRUD<Project, 'projects'>('projects').update(id, updates),
-  delete: (id: string) => db.createCRUD<Project, 'projects'>('projects').delete(id)
-};
-
-export const AIChatsDB = {
-  find: (f?: Partial<AIChat>) => db.createCRUD<AIChat, 'aiChats'>('aiChats').find(f),
-  findOne: (f: Partial<AIChat>) => db.createCRUD<AIChat, 'aiChats'>('aiChats').findOne(f),
-  create: (item: Omit<AIChat, 'id' | 'createdAt'>) => db.createCRUD<AIChat, 'aiChats'>('aiChats').create(item),
-  update: (id: string, updates: Partial<Omit<AIChat, 'id' | 'createdAt'>>) => db.createCRUD<AIChat, 'aiChats'>('aiChats').update(id, updates),
-  delete: (id: string) => db.createCRUD<AIChat, 'aiChats'>('aiChats').delete(id)
-};
-
-export const CodeReviewsDB = {
-  find: (f?: Partial<CodeReview>) => db.createCRUD<CodeReview, 'codeReviews'>('codeReviews').find(f),
-  findOne: (f: Partial<CodeReview>) => db.createCRUD<CodeReview, 'codeReviews'>('codeReviews').findOne(f),
-  create: (item: Omit<CodeReview, 'id' | 'createdAt'>) => db.createCRUD<CodeReview, 'codeReviews'>('codeReviews').create(item),
-  delete: (id: string) => db.createCRUD<CodeReview, 'codeReviews'>('codeReviews').delete(id)
-};
-
-export const BugReportsDB = {
-  find: (f?: Partial<BugReport>) => db.createCRUD<BugReport, 'bugReports'>('bugReports').find(f),
-  findOne: (f: Partial<BugReport>) => db.createCRUD<BugReport, 'bugReports'>('bugReports').findOne(f),
-  create: (item: Omit<BugReport, 'id' | 'createdAt'>) => db.createCRUD<BugReport, 'bugReports'>('bugReports').create(item),
-  delete: (id: string) => db.createCRUD<BugReport, 'bugReports'>('bugReports').delete(id)
-};
-
-export const ReadmeDocumentsDB = {
-  find: (f?: Partial<ReadmeDocument>) => db.createCRUD<ReadmeDocument, 'readmeDocuments'>('readmeDocuments').find(f),
-  findOne: (f: Partial<ReadmeDocument>) => db.createCRUD<ReadmeDocument, 'readmeDocuments'>('readmeDocuments').findOne(f),
-  create: (item: Omit<ReadmeDocument, 'id' | 'createdAt'>) => db.createCRUD<ReadmeDocument, 'readmeDocuments'>('readmeDocuments').create(item),
-  delete: (id: string) => db.createCRUD<ReadmeDocument, 'readmeDocuments'>('readmeDocuments').delete(id)
-};
-
-export const RecommendationsDB = {
-  find: (f?: Partial<Recommendation>) => db.createCRUD<Recommendation, 'recommendations'>('recommendations').find(f),
-  findOne: (f: Partial<Recommendation>) => db.createCRUD<Recommendation, 'recommendations'>('recommendations').findOne(f),
-  create: (item: Omit<Recommendation, 'id' | 'createdAt'>) => db.createCRUD<Recommendation, 'recommendations'>('recommendations').create(item),
-  delete: (id: string) => db.createCRUD<Recommendation, 'recommendations'>('recommendations').delete(id)
-};
-
-// Specialized stats DB helpers
+// Specialized stats DB helper
 export const UserStatisticsDB = {
-  findOne: (userId: string): UserStatistics => {
-    const statsList = db.getCollection('userStatistics');
-    let stats = statsList.find((s) => s.userId === userId);
+  async findOne(userId: string): Promise<UserStatistics> {
+    let stats = await UserStatisticsModel.findOne({ userId }).lean();
     if (!stats) {
-      stats = {
+      const newStats = new UserStatisticsModel({
         userId,
         totalProjects: 0,
         aiRequests: 0,
@@ -308,48 +286,40 @@ export const UserStatisticsDB = {
           { week: 'Sat', requests: 0 },
           { week: 'Sun', requests: 0 }
         ]
-      };
-      statsList.push(stats);
-      db.saveCollection('userStatistics', statsList);
+      });
+      await newStats.save();
+      stats = newStats.toObject();
     }
-    return stats;
+    return stats as unknown as UserStatistics;
   },
 
-  update: (userId: string, updates: Partial<Omit<UserStatistics, 'userId'>>): UserStatistics => {
-    const statsList = db.getCollection('userStatistics');
-    const index = statsList.findIndex((s) => s.userId === userId);
-    const current = UserStatisticsDB.findOne(userId);
-    const updated = { ...current, ...updates };
-
-    if (index === -1) {
-      statsList.push(updated);
-    } else {
-      statsList[index] = updated;
-    }
-
-    db.saveCollection('userStatistics', statsList);
-    return updated;
+  async update(userId: string, updates: Partial<Omit<UserStatistics, 'userId'>>): Promise<UserStatistics> {
+    // ensure initialization
+    await UserStatisticsDB.findOne(userId);
+    const updated = await UserStatisticsModel.findOneAndUpdate({ userId }, updates, { new: true }).lean();
+    return updated as unknown as UserStatistics;
   },
 
-  increment: (userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): UserStatistics => {
-    const current = UserStatisticsDB.findOne(userId);
-    const updates = { [field]: current[field] + 1 };
+  async increment(userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): Promise<UserStatistics> {
+    const current = await UserStatisticsDB.findOne(userId);
+    const updates: any = { [field]: current[field] + 1 };
     
-    // Also increment today's weekly activity
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const currentDay = days[new Date().getDay()];
-    const updatedActivity = current.weeklyActivity.map(act => {
-      if (act.week === currentDay) {
-        return { ...act, requests: act.requests + (field === 'aiRequests' ? 1 : 0) };
-      }
-      return act;
-    });
+    if (field === 'aiRequests') {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const currentDay = days[new Date().getDay()];
+      updates.weeklyActivity = current.weeklyActivity.map(act => {
+        if (act.week === currentDay) {
+          return { ...act, requests: act.requests + 1 };
+        }
+        return act;
+      });
+    }
 
-    return UserStatisticsDB.update(userId, { ...updates, weeklyActivity: updatedActivity });
+    return UserStatisticsDB.update(userId, updates);
   },
 
-  decrement: (userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): UserStatistics => {
-    const current = UserStatisticsDB.findOne(userId);
+  async decrement(userId: string, field: 'totalProjects' | 'aiRequests' | 'generatedDocs' | 'savedConversations'): Promise<UserStatistics> {
+    const current = await UserStatisticsDB.findOne(userId);
     const updates = { [field]: Math.max(0, current[field] - 1) };
     return UserStatisticsDB.update(userId, updates);
   }

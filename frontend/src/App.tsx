@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
 import { About } from './pages/About';
@@ -24,6 +25,15 @@ interface Toast {
   message: string;
   type: 'success' | 'error' | 'info';
 }
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  },
+});
 
 function App() {
   // Authentication Session
@@ -156,114 +166,113 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-darkBg flex flex-col justify-between relative">
-      {/* Top Navbar */}
-      <Navbar 
-        user={user} 
-        currentPage={currentPage} 
-        setPage={handleSetPage} 
-        logoutUser={logoutUser}
-        onOpenSettings={() => setShowSettings(true)}
-      />
-
-      {/* Toast Notifications */}
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-50 animate-bounce">
-          <div className={`px-4 py-3 rounded-xl border shadow-lg text-xs font-semibold flex items-center gap-2 ${
-            toast.type === 'success' ? 'bg-brand-accent/10 border-brand-accent/30 text-brand-accent' :
-            toast.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
-            'bg-brand-primary/10 border-brand-primary/30 text-brand-primary'
-          }`}>
-            <Terminal className="w-4 h-4 flex-shrink-0" />
+    <QueryClientProvider client={queryClient}>
+      <div className="min-h-screen bg-neutral-darkBg flex flex-col justify-between font-sans selection:bg-brand-primary/30 text-white selection:text-white">
+        
+        {/* Global Toast */}
+        {toast && (
+          <div className={`fixed bottom-5 right-5 z-[100] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border text-xs font-semibold animate-bounce ${toast.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-brand-primary/10 border-brand-primary/20 text-brand-primary'}`}>
             <span>{toast.message}</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* API Key settings modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full glass-panel p-6 sm:p-8 rounded-3xl border border-neutral-border space-y-6 animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center">
-              <h3 className="font-extrabold text-white flex items-center gap-1.5"><Key className="w-5 h-5 text-brand-primary" /> API Configurations</h3>
-              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-neutral-border rounded text-gray-400 hover:text-white">
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
-            
-            <p className="text-xs text-gray-400 leading-relaxed">
-              We process API queries in-memory. Enter a custom Google Gemini API Key to enable real LLM generations. Leave blank to run local mock response engines.
-            </p>
-
-            <form onSubmit={handleSaveAPIKey} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Gemini Key</label>
-                <div className="relative">
-                  <input 
-                    type={showKey ? 'text' : 'password'}
-                    placeholder="AIzaSy..."
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    className="w-full pl-4 pr-12 py-3 bg-neutral-darkBg border border-neutral-border rounded-xl font-mono text-xs text-white focus:outline-none focus:border-brand-primary"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-                  >
-                    {showKey ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Google Client ID</label>
-                <input 
-                  type="text"
-                  placeholder="xxxxxx-xxxxxx.apps.googleusercontent.com"
-                  value={googleClientId}
-                  onChange={(e) => setGoogleClientId(e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-darkBg border border-neutral-border rounded-xl font-mono text-xs text-white focus:outline-none focus:border-brand-primary"
-                />
-              </div>
-
+        {/* Global Settings Modal */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="glass-panel w-full max-w-md p-6 rounded-3xl border border-neutral-border space-y-6 relative">
               <button 
-                type="submit"
-                className="w-full py-3 bg-brand-primary text-neutral-darkBg font-bold text-xs rounded-xl shadow neon-shadow flex items-center justify-center gap-1.5"
+                onClick={() => setShowSettings(false)}
+                className="absolute top-4 right-4 p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-neutral-cardBg transition-all"
               >
-                <Save className="w-4 h-4" /> Save Configs
+                <X className="w-4 h-4" />
               </button>
-            </form>
+              
+              <div className="space-y-1">
+                <h3 className="font-bold text-white text-base">API Settings</h3>
+                <p className="text-xs text-gray-400">Configure parameters for custom services.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Gemini API Key (Optional)</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input 
+                        type={showKey ? 'text' : 'password'}
+                        placeholder="AI functions fallback key..."
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-neutral-darkBg border border-neutral-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-primary"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="absolute right-3 top-2.5 text-gray-500 hover:text-white"
+                      >
+                        {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Google OAuth Client ID</label>
+                  <input 
+                    type="text"
+                    placeholder="Enter Client ID..."
+                    value={googleClientId}
+                    onChange={(e) => setGoogleClientId(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-darkBg border border-neutral-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-primary"
+                  />
+                </div>
+
+                <button 
+                  onClick={handleSaveAPIKey}
+                  className="w-full py-2.5 bg-brand-primary text-neutral-darkBg font-bold text-xs rounded-xl shadow neon-shadow flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity"
+                >
+                  <Save className="w-4 h-4" /> Save Preferences
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Main Content Router */}
-      <main className="flex-grow">
-        {currentPage === 'home' && <Home setPage={handleSetPage} />}
-        {currentPage === 'about' && <About />}
-        {currentPage === 'contact' && <Contact />}
-        {currentPage === 'privacy' && <Privacy />}
-        {currentPage === 'terms' && <Terms />}
-        
-        {currentPage === 'login' && <Login setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
-        {currentPage === 'register' && <Register setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
-        
-        {currentPage === 'dashboard' && <Dashboard token={token} setPage={handleSetPage} showToast={showToast} />}
-        {currentPage === 'projects' && <Projects token={token} setPage={handleSetPage} showToast={showToast} />}
-        {currentPage === 'project-details' && <ProjectDetails token={token} projectId={currentProjectId} setPage={handleSetPage} showToast={showToast} />}
-        {currentPage === 'add-project' && <AddProject token={token} setPage={handleSetPage} showToast={showToast} />}
-        {currentPage === 'edit-project' && <EditProject token={token} projectId={currentProjectId} setPage={handleSetPage} showToast={showToast} />}
-        
-        {currentPage === 'workspace' && <Workspace token={token} projectsList={projectsList} showToast={showToast} />}
-        {currentPage === 'chat' && <Chat token={token} projectsList={projectsList} showToast={showToast} />}
-        {currentPage === 'history' && <History token={token} setPage={handleSetPage} showToast={showToast} />}
-        {currentPage === 'profile' && <Profile token={token} logoutUser={logoutUser} showToast={showToast} />}
-      </main>
+        {/* Global Navigation Header */}
+        <Navbar 
+          user={user} 
+          currentPage={currentPage} 
+          setPage={handleSetPage} 
+          logoutUser={logoutUser}
+          onOpenSettings={() => setShowSettings(true)}
+        />
 
-      {/* Bottom Footer */}
-      <Footer setPage={handleSetPage} />
-    </div>
+        {/* Main Content Router */}
+        <main className="flex-grow">
+          {currentPage === 'home' && <Home setPage={handleSetPage} />}
+          {currentPage === 'about' && <About />}
+          {currentPage === 'contact' && <Contact />}
+          {currentPage === 'privacy' && <Privacy />}
+          {currentPage === 'terms' && <Terms />}
+          
+          {currentPage === 'login' && <Login setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
+          {currentPage === 'register' && <Register setPage={handleSetPage} loginUser={loginUser} showToast={showToast} googleClientId={googleClientId} />}
+          
+          {currentPage === 'dashboard' && <Dashboard token={token} setPage={handleSetPage} showToast={showToast} />}
+          {currentPage === 'projects' && <Projects token={token} setPage={handleSetPage} showToast={showToast} />}
+          {currentPage === 'project-details' && <ProjectDetails token={token} projectId={currentProjectId} setPage={handleSetPage} showToast={showToast} />}
+          {currentPage === 'add-project' && <AddProject token={token} setPage={handleSetPage} showToast={showToast} />}
+          {currentPage === 'edit-project' && <EditProject token={token} projectId={currentProjectId} setPage={handleSetPage} showToast={showToast} />}
+          
+          {currentPage === 'workspace' && <Workspace token={token} projectsList={projectsList} showToast={showToast} />}
+          {currentPage === 'chat' && <Chat token={token} projectsList={projectsList} showToast={showToast} />}
+          {currentPage === 'history' && <History token={token} setPage={handleSetPage} showToast={showToast} />}
+          {currentPage === 'profile' && <Profile token={token} logoutUser={logoutUser} showToast={showToast} />}
+        </main>
+
+        {/* Bottom Footer */}
+        <Footer setPage={handleSetPage} />
+      </div>
+    </QueryClientProvider>
   );
 }
 

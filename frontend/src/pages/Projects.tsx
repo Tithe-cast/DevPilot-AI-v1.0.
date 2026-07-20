@@ -3,6 +3,7 @@ import {
   FolderGit2, Search, Filter, ArrowUpDown, Plus, 
   Trash2, Edit, ExternalLink, Calendar, Code2, RefreshCw
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 interface Project {
   id: string;
@@ -12,6 +13,7 @@ interface Project {
   framework: string;
   language: string;
   repoUrl?: string;
+  imageUrl?: string;
   status: 'Active' | 'Archived' | 'Planning';
   createdAt: string;
 }
@@ -23,30 +25,36 @@ interface ProjectsProps {
 }
 
 export const Projects: React.FC<ProjectsProps> = ({ token, setPage, showToast }) => {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  
   // Search & Filter state
   const [search, setSearch] = useState('');
   const [frameworkFilter, setFrameworkFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
+  
+  // Pagination State
+  const [currentPageNum, setCurrentPageNum] = useState(1);
+  const ITEMS_PER_PAGE = 8;
 
-  const fetchProjects = async () => {
-    setLoading(true);
-    try {
+  // TanStack Query for Projects
+  const { data: projects = [], isLoading, error: queryError, refetch } = useQuery<Project[]>({
+    queryKey: ['projects', token],
+    queryFn: async () => {
+      if (!token) return [];
       const response = await fetch('/api/projects', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setProjects(data);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to retrieve projects', 'error');
-    } finally {
-      setLoading(false);
+      if (!response.ok) throw new Error(data.error || 'Failed to retrieve projects');
+      return data as Project[];
+    },
+    enabled: !!token
+  });
+
+  useEffect(() => {
+    if (queryError) {
+      showToast(queryError.message || 'Failed to retrieve projects', 'error');
     }
-  };
+  }, [queryError]);
 
   const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation(); // prevent card click
@@ -62,15 +70,11 @@ export const Projects: React.FC<ProjectsProps> = ({ token, setPage, showToast })
         throw new Error(data.error);
       }
       showToast('Project deleted successfully', 'success');
-      fetchProjects();
+      refetch();
     } catch (err: any) {
       showToast(err.message || 'Failed to delete project', 'error');
     }
   };
-
-  useEffect(() => {
-    if (token) fetchProjects();
-  }, [token]);
 
   // Extract frameworks list for filters
   const frameworks = ['All', ...Array.from(new Set(projects.map(p => p.framework)))];
@@ -91,6 +95,15 @@ export const Projects: React.FC<ProjectsProps> = ({ token, setPage, showToast })
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPageNum(1);
+  }, [search, frameworkFilter, statusFilter]);
+
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPageNum - 1) * ITEMS_PER_PAGE;
+  const paginatedProjects = filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   // Unique styling helper for cover gradient based on project name
   const getCoverGradient = (name: string) => {
@@ -191,7 +204,7 @@ export const Projects: React.FC<ProjectsProps> = ({ token, setPage, showToast })
       </div>
 
       {/* Project Card Grid */}
-      {loading ? (
+      {isLoading ? (
         // Skeleton loader
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -219,72 +232,103 @@ export const Projects: React.FC<ProjectsProps> = ({ token, setPage, showToast })
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredProjects.map((p) => (
-            <div 
-              key={p.id}
-              onClick={() => setPage('project-details', p.id)}
-              className="glass-panel rounded-2xl border border-neutral-border flex flex-col justify-between overflow-hidden cursor-pointer hover:translate-y-[-2px] transition-all hover:border-brand-primary/20 group"
-            >
-              {/* Cover Gradient/Mockup */}
-              <div className={`h-24 bg-gradient-to-tr ${getCoverGradient(p.name)} border-b flex items-center justify-center relative p-4`}>
-                <Code2 className="w-8 h-8 text-white opacity-40 group-hover:scale-105 transition-transform" />
-                <span className={`absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full ${getStatusBadge(p.status)} font-semibold`}>
-                  {p.status}
-                </span>
-              </div>
-
-              {/* Body */}
-              <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                <div>
-                  <h3 className="font-bold text-white group-hover:text-brand-primary transition-colors text-lg truncate" title={p.name}>
-                    {p.name}
-                  </h3>
-                  <span className="text-[10px] text-brand-primary font-semibold uppercase tracking-wider block mt-1">{p.category}</span>
-                  <p className="text-xs text-gray-400 mt-2 line-clamp-2 leading-relaxed">
-                    {p.description}
-                  </p>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {paginatedProjects.map((p) => (
+              <div 
+                key={p.id}
+                onClick={() => setPage('project-details', p.id)}
+                className="glass-panel rounded-2xl border border-neutral-border flex flex-col justify-between overflow-hidden cursor-pointer hover:translate-y-[-2px] transition-all hover:border-brand-primary/20 group"
+              >
+                {/* Cover Gradient/Mockup */}
+                <div className="h-24 relative border-b overflow-hidden">
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  ) : (
+                    <div className={`w-full h-full bg-gradient-to-tr ${getCoverGradient(p.name)} flex items-center justify-center`}>
+                      <Code2 className="w-8 h-8 text-white opacity-40 group-hover:scale-105 transition-transform" />
+                    </div>
+                  )}
+                  <span className={`absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full ${getStatusBadge(p.status)} font-semibold`}>
+                    {p.status}
+                  </span>
                 </div>
 
-                <div className="space-y-3">
-                  {/* Meta items */}
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 border-t border-neutral-border/50 pt-3">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-brand-secondary" />
-                      {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-neutral-darkBg border border-neutral-border text-gray-400 font-mono">
-                      {p.framework}
-                    </span>
+                {/* Body */}
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    <h3 className="font-bold text-white group-hover:text-brand-primary transition-colors text-lg truncate" title={p.name}>
+                      {p.name}
+                    </h3>
+                    <span className="text-[10px] text-brand-primary font-semibold uppercase tracking-wider block mt-1">{p.category}</span>
+                    <p className="text-xs text-gray-400 mt-2 line-clamp-2 leading-relaxed">
+                      {p.description}
+                    </p>
                   </div>
 
-                  {/* Actions footer */}
-                  <div className="flex justify-between items-center gap-2 pt-1">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setPage('project-details', p.id); }}
-                      className="flex-1 py-2 text-center text-xs font-semibold rounded-lg bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary hover:text-neutral-darkBg transition-all"
-                    >
-                      View Details
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setPage('edit-project', p.id); }}
-                      className="p-2 bg-neutral-cardBg border border-neutral-border text-gray-400 hover:text-white rounded-lg transition-colors"
-                      title="Edit settings"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                      onClick={(e) => handleDelete(p.id, p.name, e)}
-                      className="p-2 bg-neutral-cardBg border border-neutral-border text-gray-400 hover:text-red-400 rounded-lg transition-colors"
-                      title="Delete project"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                  <div className="space-y-3">
+                    {/* Meta items */}
+                    <div className="flex items-center justify-between text-[10px] text-gray-500 border-t border-neutral-border/50 pt-3">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-brand-secondary" />
+                        {new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-neutral-darkBg border border-neutral-border text-gray-400 font-mono">
+                        {p.framework}
+                      </span>
+                    </div>
+
+                    {/* Actions footer */}
+                    <div className="flex justify-between items-center gap-2 pt-1">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setPage('project-details', p.id); }}
+                        className="flex-1 py-2 text-center text-xs font-semibold rounded-lg bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary hover:text-neutral-darkBg transition-all"
+                      >
+                        View Details
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setPage('edit-project', p.id); }}
+                        className="p-2 bg-neutral-cardBg border border-neutral-border text-gray-400 hover:text-white rounded-lg transition-colors"
+                        title="Edit settings"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDelete(p.id, p.name, e)}
+                        className="p-2 bg-neutral-cardBg border border-neutral-border text-gray-400 hover:text-red-400 rounded-lg transition-colors"
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 pt-6">
+              <button
+                onClick={() => setCurrentPageNum(prev => Math.max(prev - 1, 1))}
+                disabled={currentPageNum === 1}
+                className="px-4 py-2 bg-neutral-cardBg border border-neutral-border text-gray-300 rounded-xl text-xs hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-400 font-semibold">
+                Page {currentPageNum} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPageNum(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPageNum === totalPages}
+                className="px-4 py-2 bg-neutral-cardBg border border-neutral-border text-gray-300 rounded-xl text-xs hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

@@ -11,7 +11,7 @@ const hashPassword = (password: string): string => {
   return crypto.pbkdf2Sync(password, SALT, 1000, 64, 'sha512').toString('hex');
 };
 
-export const register = (req: Request, res: Response): void => {
+export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, name } = req.body;
 
@@ -20,7 +20,7 @@ export const register = (req: Request, res: Response): void => {
       return;
     }
 
-    const existingUser = UsersDB.findOne({ email });
+    const existingUser = await UsersDB.findOne({ email });
     if (existingUser) {
       res.status(400).json({ error: 'Email already registered' });
       return;
@@ -29,7 +29,7 @@ export const register = (req: Request, res: Response): void => {
     const passwordHash = hashPassword(password);
     const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`;
 
-    const newUser = UsersDB.create({
+    const newUser = await UsersDB.create({
       email,
       passwordHash,
       name,
@@ -37,7 +37,7 @@ export const register = (req: Request, res: Response): void => {
     });
 
     // Initialize statistics
-    UserStatisticsDB.findOne(newUser.id);
+    await UserStatisticsDB.findOne(newUser.id);
 
     const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -55,7 +55,7 @@ export const register = (req: Request, res: Response): void => {
   }
 };
 
-export const login = (req: Request, res: Response): void => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -64,7 +64,7 @@ export const login = (req: Request, res: Response): void => {
       return;
     }
 
-    const user = UsersDB.findOne({ email });
+    const user = await UsersDB.findOne({ email });
     if (!user) {
       res.status(400).json({ error: 'Invalid email or password' });
       return;
@@ -118,7 +118,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    let user = UsersDB.findOne({ email });
+    let user = await UsersDB.findOne({ email });
 
     if (!user) {
       // Create user with dummy password hash for social login
@@ -126,7 +126,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
       const passwordHash = hashPassword(dummyPassword);
       const defaultAvatar = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`;
 
-      user = UsersDB.create({
+      user = await UsersDB.create({
         email,
         passwordHash,
         name,
@@ -134,7 +134,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
       });
 
       // Initialize stats
-      UserStatisticsDB.findOne(user.id);
+      await UserStatisticsDB.findOne(user.id);
     }
 
     const jwtToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
@@ -153,7 +153,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
+export const getProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -161,13 +161,13 @@ export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
       return;
     }
 
-    const user = UsersDB.findOne({ id: userId });
+    const user = await UsersDB.findOne({ id: userId });
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    const stats = UserStatisticsDB.findOne(userId);
+    const stats = await UserStatisticsDB.findOne(userId);
 
     res.status(200).json({
       user: {
@@ -183,7 +183,7 @@ export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
   }
 };
 
-export const updateProfile = (req: AuthenticatedRequest, res: Response): void => {
+export const updateProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -198,7 +198,7 @@ export const updateProfile = (req: AuthenticatedRequest, res: Response): void =>
     if (avatarUrl) updates.avatarUrl = avatarUrl;
     if (password) updates.passwordHash = hashPassword(password);
 
-    const updatedUser = UsersDB.update(userId, updates);
+    const updatedUser = await UsersDB.update(userId, updates);
     if (!updatedUser) {
       res.status(404).json({ error: 'User not found' });
       return;

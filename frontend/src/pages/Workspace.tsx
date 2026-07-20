@@ -41,6 +41,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ token, projectsList, showT
   const [readmeFeatures, setReadmeFeatures] = useState('');
   const [readmeInstall, setReadmeInstall] = useState('');
   const [readmeTech, setReadmeTech] = useState('');
+  const [templateStyle, setTemplateStyle] = useState('Standard');
+  const [outputLength, setOutputLength] = useState('Medium');
   const [readmeOutput, setReadmeOutput] = useState('');
 
   // --- 4. Recommender State ---
@@ -146,7 +148,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ token, projectsList, showT
           description: readmeDesc,
           features: readmeFeatures,
           installation: readmeInstall,
-          techStack: readmeTech
+          techStack: readmeTech,
+          templateStyle,
+          outputLength
         })
       });
       const data = await response.json();
@@ -354,6 +358,32 @@ export const Workspace: React.FC<WorkspaceProps> = ({ token, projectsList, showT
                   placeholder="e.g. Node, Express, TypeScript, MongoDB"
                   className="w-full px-4 py-2 bg-neutral-darkBg border border-neutral-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-primary"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-2">Template Style</label>
+                  <select 
+                    value={templateStyle} onChange={(e) => setTemplateStyle(e.target.value)}
+                    className="w-full px-4 py-2 bg-neutral-darkBg border border-neutral-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-primary"
+                  >
+                    <option value="Standard">Standard</option>
+                    <option value="Minimalist">Minimalist</option>
+                    <option value="Academic">Academic</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-2">Output Length</label>
+                  <select 
+                    value={outputLength} onChange={(e) => setOutputLength(e.target.value)}
+                    className="w-full px-4 py-2 bg-neutral-darkBg border border-neutral-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-primary"
+                  >
+                    <option value="Short">Short</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Long">Long</option>
+                  </select>
+                </div>
               </div>
 
               <button 

@@ -98,14 +98,14 @@ export const reviewCode = async (req: AuthenticatedRequest, res: Response): Prom
       };
     }
 
-    const savedReview = CodeReviewsDB.create({
+    const savedReview = await CodeReviewsDB.create({
       userId,
       language,
       sourceCode,
       review: reviewResult
     });
 
-    UserStatisticsDB.increment(userId, 'aiRequests');
+    await UserStatisticsDB.increment(userId, 'aiRequests');
 
     res.status(200).json(savedReview);
   } catch (error: any) {
@@ -163,7 +163,7 @@ export const fixBug = async (req: AuthenticatedRequest, res: Response): Promise<
       };
     }
 
-    const savedBugReport = BugReportsDB.create({
+    const savedBugReport = await BugReportsDB.create({
       userId,
       errorMessage,
       stackTrace: stackTrace || '',
@@ -171,7 +171,7 @@ export const fixBug = async (req: AuthenticatedRequest, res: Response): Promise<
       analysis: analysisResult
     });
 
-    UserStatisticsDB.increment(userId, 'aiRequests');
+    await UserStatisticsDB.increment(userId, 'aiRequests');
 
     res.status(200).json(savedBugReport);
   } catch (error: any) {
@@ -188,7 +188,7 @@ export const generateReadme = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const { projectName, description, features, installation, techStack } = req.body;
+    const { projectName, description, features, installation, techStack, templateStyle, outputLength } = req.body;
     const clientKey = req.headers['x-api-key'] as string | undefined;
 
     if (!projectName || !description) {
@@ -198,11 +198,22 @@ export const generateReadme = async (req: AuthenticatedRequest, res: Response): 
 
     let readmeContent = '';
     try {
+      const lengthInstructions = outputLength === 'Short' ? 'Keep it extremely concise and minimalist.' :
+                                 outputLength === 'Long' ? 'Provide exhaustive details, complete sub-sections, and comprehensive explanations.' :
+                                 'Provide a standard, well-balanced document length.';
+
+      const styleInstructions = templateStyle === 'Minimalist' ? 'Use a sleek, minimalist style with clean headers and minimal text.' :
+                                 templateStyle === 'Academic' ? 'Use formal, academic language with highly structured theoretical sections.' :
+                                 'Use a standard, highly engaging, professional developer documentation style.';
+
       const prompt = `Generate a professional, fully detailed README.md file in markdown format for a project named "${projectName}".
       Description: ${description}
       Features: ${features || 'None provided'}
       Installation Instructions: ${installation || 'Standard npm install'}
       Tech Stack: ${techStack || 'Not specified'}
+      
+      Style Guidelines: ${styleInstructions}
+      Length Guidelines: ${lengthInstructions}
       
       Make the README comprehensive, featuring code blocks, configuration guides, badges, and layout tables. Return only the markdown content.`;
 
@@ -211,7 +222,7 @@ export const generateReadme = async (req: AuthenticatedRequest, res: Response): 
       console.log('Falling back to mock README generator', err);
       // High-quality mock markdown
       readmeContent = `# 🚀 ${projectName}
-
+      
 ${description}
 
 ---
@@ -251,7 +262,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 `;
     }
 
-    const savedReadme = ReadmeDocumentsDB.create({
+    const savedReadme = await ReadmeDocumentsDB.create({
       userId,
       projectName,
       description,
@@ -261,8 +272,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
       content: readmeContent
     });
 
-    UserStatisticsDB.increment(userId, 'aiRequests');
-    UserStatisticsDB.increment(userId, 'generatedDocs');
+    await UserStatisticsDB.increment(userId, 'aiRequests');
+    await UserStatisticsDB.increment(userId, 'generatedDocs');
 
     res.status(200).json(savedReadme);
   } catch (error: any) {
@@ -287,7 +298,7 @@ export const recommendProjectSetup = async (req: AuthenticatedRequest, res: Resp
       return;
     }
 
-    const project = ProjectsDB.findOne({ id: projectId, userId });
+    const project = await ProjectsDB.findOne({ id: projectId, userId });
     if (!project) {
       res.status(404).json({ error: 'Project not found' });
       return;
@@ -335,13 +346,13 @@ export const recommendProjectSetup = async (req: AuthenticatedRequest, res: Resp
       };
     }
 
-    const savedRecommendation = RecommendationsDB.create({
+    const savedRecommendation = await RecommendationsDB.create({
       userId,
       projectId,
       recommendation: recommendationResult
     });
 
-    UserStatisticsDB.increment(userId, 'aiRequests');
+    await UserStatisticsDB.increment(userId, 'aiRequests');
 
     res.status(200).json(savedRecommendation);
   } catch (error: any) {
@@ -371,7 +382,7 @@ export const handleAIChat = async (req: AuthenticatedRequest, res: Response): Pr
     let selectedProject = null;
 
     if (projectId) {
-      selectedProject = ProjectsDB.findOne({ id: projectId, userId });
+      selectedProject = await ProjectsDB.findOne({ id: projectId, userId });
       if (selectedProject) {
         projectContextText = `Current user is working on project "${selectedProject.name}" (Framework: ${selectedProject.framework}, Language: ${selectedProject.language}, Category: ${selectedProject.category}). Description: "${selectedProject.description}". Make your answer relevant to this context.`;
       }
@@ -452,24 +463,24 @@ What programming questions or setup requirements can I help you with right now?`
 
     let session;
     if (chatSessionId) {
-      session = AIChatsDB.findOne({ id: chatSessionId, userId });
+      session = await AIChatsDB.findOne({ id: chatSessionId, userId });
       if (session) {
         const updatedMessages = [...session.messages, ...newMessagePair];
-        session = AIChatsDB.update(chatSessionId, { messages: updatedMessages });
+        session = await AIChatsDB.update(chatSessionId, { messages: updatedMessages });
       }
     }
 
     if (!session) {
-      session = AIChatsDB.create({
+      session = await AIChatsDB.create({
         userId,
         projectId: projectId || undefined,
         title: lastMessage.substring(0, 30) + (lastMessage.length > 30 ? '...' : ''),
         messages: newMessagePair
       });
-      UserStatisticsDB.increment(userId, 'savedConversations');
+      await UserStatisticsDB.increment(userId, 'savedConversations');
     }
 
-    UserStatisticsDB.increment(userId, 'aiRequests');
+    await UserStatisticsDB.increment(userId, 'aiRequests');
 
     res.status(200).json(session);
   } catch (error: any) {
@@ -486,11 +497,11 @@ export const getAIHistory = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
-    const codeReviews = CodeReviewsDB.find({ userId });
-    const bugReports = BugReportsDB.find({ userId });
-    const readmeDocuments = ReadmeDocumentsDB.find({ userId });
-    const recommendations = RecommendationsDB.find({ userId });
-    const aiChats = AIChatsDB.find({ userId });
+    const codeReviews = await CodeReviewsDB.find({ userId });
+    const bugReports = await BugReportsDB.find({ userId });
+    const readmeDocuments = await ReadmeDocumentsDB.find({ userId });
+    const recommendations = await RecommendationsDB.find({ userId });
+    const aiChats = await AIChatsDB.find({ userId });
 
     res.status(200).json({
       codeReviews,
@@ -516,16 +527,16 @@ export const deleteHistoryItem = async (req: AuthenticatedRequest, res: Response
 
     let deleted = false;
     if (type === 'codeReview') {
-      deleted = CodeReviewsDB.delete(id);
+      deleted = await CodeReviewsDB.delete(id);
     } else if (type === 'bugReport') {
-      deleted = BugReportsDB.delete(id);
+      deleted = await BugReportsDB.delete(id);
     } else if (type === 'readme') {
-      deleted = ReadmeDocumentsDB.delete(id);
+      deleted = await ReadmeDocumentsDB.delete(id);
     } else if (type === 'recommendation') {
-      deleted = RecommendationsDB.delete(id);
+      deleted = await RecommendationsDB.delete(id);
     } else if (type === 'chat') {
-      deleted = AIChatsDB.delete(id);
-      UserStatisticsDB.decrement(userId, 'savedConversations');
+      deleted = await AIChatsDB.delete(id);
+      await UserStatisticsDB.decrement(userId, 'savedConversations');
     }
 
     if (!deleted) {

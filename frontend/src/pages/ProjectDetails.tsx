@@ -12,6 +12,7 @@ interface Project {
   framework: string;
   language: string;
   repoUrl?: string;
+  imageUrl?: string;
   status: 'Active' | 'Archived' | 'Planning';
   createdAt: string;
 }
@@ -38,33 +39,36 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   const fetchProjectDetails = async () => {
     setLoading(true);
     try {
+      const headers: any = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       // 1. Fetch project profile
-      const response = await fetch(`/api/projects/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await fetch(`/api/projects/${projectId}`, { headers });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setProject(data);
 
-      // 2. Fetch full history to extract linked recommend and readmes
-      const histResponse = await fetch('/api/ai/history', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const histData = await histResponse.json();
-      
-      // Filter recommendations linked to this project
-      const matchedRec = histData.recommendations?.find((r: any) => r.projectId === projectId);
-      if (matchedRec) setRecommendation(matchedRec.recommendation);
+      // 2. Fetch full history to extract linked recommend and readmes (only if logged in)
+      if (token) {
+        const histResponse = await fetch('/api/ai/history', { headers });
+        const histData = await histResponse.json();
+        
+        // Filter recommendations linked to this project
+        const matchedRec = histData.recommendations?.find((r: any) => r.projectId === projectId);
+        if (matchedRec) setRecommendation(matchedRec.recommendation);
 
-      // Filter readmes linked to this project by matching the project name
-      const matchedReadmes = histData.readmeDocuments?.filter(
-        (doc: any) => doc.projectName.toLowerCase() === data.name.toLowerCase()
-      ) || [];
-      setReadmes(matchedReadmes);
+        // Filter readmes linked to this project by matching the project name
+        const matchedReadmes = histData.readmeDocuments?.filter(
+          (doc: any) => doc.projectName.toLowerCase() === data.name.toLowerCase()
+        ) || [];
+        setReadmes(matchedReadmes);
+      }
 
     } catch (err: any) {
       showToast(err.message || 'Failed to retrieve project details', 'error');
-      setPage('projects');
+      setPage(token ? 'projects' : 'home');
     } finally {
       setLoading(false);
     }
@@ -94,7 +98,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
   };
 
   useEffect(() => {
-    if (token && projectId) fetchProjectDetails();
+    if (projectId) fetchProjectDetails();
   }, [token, projectId]);
 
   if (loading) {
@@ -128,7 +132,12 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
 
       {/* Project Banner Card */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-neutral-border relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-4">
+        {project.imageUrl && (
+          <div className="absolute inset-0 z-0 opacity-10 pointer-events-none">
+            <img src={project.imageUrl} alt="" className="w-full h-full object-cover filter blur-sm" />
+          </div>
+        )}
+        <div className="space-y-4 relative z-10">
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20 font-semibold uppercase tracking-wider">
               {project.category}
@@ -161,16 +170,18 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
         </div>
 
         {/* Workspace Quick CTA */}
-        <div className="p-5 rounded-2xl bg-neutral-darkBg border border-neutral-border text-center flex flex-col items-center gap-3 max-w-xs">
-          <Sparkles className="w-6 h-6 text-brand-secondary" />
-          <p className="text-xs text-gray-400">Launch AI workspace anchors automatically to this project.</p>
-          <button 
-            onClick={() => setPage('workspace')}
-            className="w-full py-2.5 bg-brand-primary text-neutral-darkBg font-bold text-xs rounded-xl shadow hover:opacity-90 transition-opacity"
-          >
-            Launch AI Tools
-          </button>
-        </div>
+        {token && (
+          <div className="p-5 rounded-2xl bg-neutral-darkBg border border-neutral-border text-center flex flex-col items-center gap-3 max-w-xs">
+            <Sparkles className="w-6 h-6 text-brand-secondary" />
+            <p className="text-xs text-gray-400">Launch AI workspace anchors automatically to this project.</p>
+            <button 
+              onClick={() => setPage('workspace')}
+              className="w-full py-2.5 bg-brand-primary text-neutral-darkBg font-bold text-xs rounded-xl shadow hover:opacity-90 transition-opacity"
+            >
+              Launch AI Tools
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Grid: Insights & Documents */}
@@ -184,7 +195,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                 <Cpu className="w-5 h-5 text-brand-primary" />
                 <h3 className="text-lg font-bold text-white">AI Architecture Insights</h3>
               </div>
-              {!recommendation && (
+              {token && !recommendation && (
                 <button 
                   onClick={handleGenerateRecommendations}
                   disabled={recommending}
@@ -236,14 +247,16 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                   <p className="text-xs text-gray-400 leading-relaxed">{recommendation.architectureTips}</p>
                 </div>
 
-                <button 
-                  onClick={handleGenerateRecommendations}
-                  disabled={recommending}
-                  className="py-2.5 px-4 bg-neutral-cardBg border border-neutral-border text-gray-300 rounded-xl text-xs hover:text-white transition-colors flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${recommending ? 'animate-spin' : ''}`} />
-                  Regenerate recommendations
-                </button>
+                {token && (
+                  <button 
+                    onClick={handleGenerateRecommendations}
+                    disabled={recommending}
+                    className="py-2.5 px-4 bg-neutral-cardBg border border-neutral-border text-gray-300 rounded-xl text-xs hover:text-white transition-colors flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-brand-primary ${recommending ? 'animate-spin' : ''}`} />
+                    Regenerate recommendations
+                  </button>
+                )}
               </div>
             ) : (
               <div className="text-center py-10 space-y-3 bg-neutral-darkBg/40 border border-dashed border-neutral-border rounded-2xl">
